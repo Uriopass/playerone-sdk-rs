@@ -78,7 +78,7 @@ impl From<_POACameraProperties> for CameraProperties {
 
         let mut bins = Vec::with_capacity(value.bins.len());
         for bin in value.bins {
-            if bin == -1 {
+            if bin <= 0 {
                 break;
             }
             bins.push(bin as u32);
@@ -363,13 +363,14 @@ pub struct AllConfigBounds {
     /// exposure time(unit: us)
     pub exposure: ConfigBounds<i64>,
     pub gain: ConfigBounds<i64>,
-    pub hardware_bin: ConfigBounds<i64>,
+    pub hardware_bin: Option<ConfigBounds<i64>>,
     /// red pixels coefficient of white balance
-    pub wb_r: ConfigBounds<i64>,
+    pub wb_r: Option<ConfigBounds<i64>>,
     /// green pixels coefficient of white balance
-    pub wb_g: ConfigBounds<i64>,
+    pub wb_g: Option<ConfigBounds<i64>>,
     /// blue pixels coefficient of white balance
-    pub wb_b: ConfigBounds<i64>,
+    pub wb_b: Option<ConfigBounds<i64>>,
+    /// gain offset (meaning: what 0 represents)
     pub offset: ConfigBounds<i64>,
     /// maximum gain when auto-adjust
     pub auto_max_gain: ConfigBounds<i64>,
@@ -468,10 +469,10 @@ impl From<Vec<POAConfigAttributes>> for AllConfigBounds {
         Self {
             exposure: exposure.expect("exposure is not found"),
             gain: gain.expect("gain is not found"),
-            hardware_bin: hardware_bin.expect("hardware_bin is not found"),
-            wb_r: wb_r.expect("wb_r is not found"),
-            wb_g: wb_g.expect("wb_g is not found"),
-            wb_b: wb_b.expect("wb_b is not found"),
+            hardware_bin,
+            wb_r,
+            wb_g,
+            wb_b,
             offset: offset.expect("offset is not found"),
             auto_max_gain: autoexpo_max_gain.expect("autoexpo_max_gain is not found"),
             auto_max_exposure: autoexpo_max_exposure.expect("autoexpo_max_exposure is not found"),

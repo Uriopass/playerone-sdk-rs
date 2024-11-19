@@ -30,18 +30,27 @@ pub fn main() {
         )
         .expect("setting image size");
 
-    let mut buffer = camera.create_image_buffer();
+    let mut i = 0;
 
     camera
-        .capture(&mut buffer, Some(1000))
-        .expect("getting frame");
+        .stream(Some(1000), |camera, buffer| {
+            let img: GrayImage = image::ImageBuffer::from_vec(
+                camera.properties().max_width,
+                camera.properties().max_height,
+                buffer.iter().copied().collect::<Vec<u8>>(),
+            )
+            .expect("converting to image buffer");
 
-    let img: GrayImage = image::ImageBuffer::from_vec(
-        camera.properties().max_width,
-        camera.properties().max_height,
-        buffer,
-    )
-    .expect("converting to image buffer");
+            img.save(format!("camera_frame_{}.png", i))
+                .expect("saving to file failed");
 
-    img.save("camera_frame.png").expect("saving to file failed");
+            i += 1;
+            if i == 10 {
+                return false;
+            }
+            true
+        })
+        .expect("stream failed");
+
+    camera.close().unwrap();
 }

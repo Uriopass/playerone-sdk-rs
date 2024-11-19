@@ -35,7 +35,7 @@ fn main() {
         _ => unimplemented!("Unsupported OS"),
     }
 
-    println!("cargo:rustc-link-lib=static=PlayerOneCamera_Static");
+    println!("cargo:rustc-link-lib=PlayerOneCamera");
 
     let bindings = bindgen::Builder::default()
         .header(HEADER_PATH)

@@ -2,7 +2,7 @@ use std::ffi::{c_int, c_long};
 
 use playerone_sdk_sys::{
     _POABool as POABool, _POAConfig as POAConfig, _POAErrors, _POAImgFormat as POAImgFormat, FromPOAConfigValue,
-    POACameraProperties, POACloseCamera, POAConfigAttributes, POAConfigValue,
+    POACameraProperties, POACloseCamera, POAConfigAttributes, POAConfigValue, POAErrors,
     POAGetCameraCount, POAGetCameraProperties, POAGetConfig, POAGetConfigAttributes, POAGetConfigsCount,
     POAGetImageData, POAGetImageFormat, POAGetImageSize, POAGetImageStartPos, POAImageReady, POAInitCamera,
     POAOpenCamera, POASetConfig, POASetImageFormat, POASetImageSize,
@@ -10,6 +10,7 @@ use playerone_sdk_sys::{
 };
 use playerone_sdk_sys::POABool::{POA_FALSE, POA_TRUE};
 use playerone_sdk_sys::POAConfig::{POA_EXPOSURE, POA_GAIN};
+use playerone_sdk_sys::POAErrors::POA_OK;
 
 use crate::{AllConfigBounds, CameraProperties, Error, ImageFormat};
 
@@ -122,10 +123,11 @@ impl Camera {
     }
 
     /// Calls the callback continuously with the newest image data.
+    /// Stops the stream if the callback returns false.
     pub fn stream(
         &mut self,
         timeout: Option<u32>,
-        mut callback: impl FnMut(&mut [u8]),
+        mut callback: impl FnMut(&mut Camera, &[u8]) -> bool,
     ) -> POAResult<()> {
         if let Some(timeout) = timeout {
             if timeout > i32::MAX as u32 {
@@ -144,8 +146,12 @@ impl Camera {
                     return Err(e);
                 }
             }
-            callback(&mut buffer);
+            if !callback(self, &buffer) {
+                break;
+            }
         }
+
+        Ok(())
     }
 
     /// Creates a buffer of the proper size to hold the image data
@@ -639,6 +645,9 @@ impl Camera {
 
 /// a lot of functions should never fail by construction: pointer are not null, camera_id is valid
 /// and camera is open! so we can safely ignore a lot of api errors
-fn safe_error(error: _POAErrors) {
+fn safe_error(error: POAErrors) {
+    if error == POA_OK {
+        return;
+    }
     panic!("unexpected POA error: {}", Error::from(error));
 }

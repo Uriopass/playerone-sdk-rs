@@ -1,3 +1,4 @@
 target/
 playerone-sdk/target
 playerone-sdk-sys/target
+*.png
