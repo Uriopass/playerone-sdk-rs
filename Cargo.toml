@@ -1,0 +1,8 @@
+[workspace]
+
+members = [
+    "playerone-sdk",
+    "playerone-sdk-sys"
+]
+
+resolver = "2"
