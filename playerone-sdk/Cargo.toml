@@ -11,3 +11,9 @@ image = { version = "0.25.5", default-features = false, features = ["png"] }
 
 [[example]]
 name = "single_frame"
+
+[[example]]
+name = "stream"
+
+[[example]]
+name = "fps"
