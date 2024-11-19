@@ -129,6 +129,18 @@ pub enum ImageFormat {
     MONO8,
 }
 
+impl ImageFormat {
+    pub fn bytes_per_pixel(&self) -> usize {
+        use ImageFormat::*;
+        match self {
+            RAW8 => 1,
+            RAW16 => 2,
+            RGB24 => 3,
+            MONO8 => 1,
+        }
+    }
+}
+
 impl From<_POAImgFormat> for ImageFormat {
     fn from(value: _POAImgFormat) -> Self {
         use ImageFormat::*;
@@ -185,6 +197,7 @@ impl From<_POABayerPattern> for BayerPattern {
     }
 }
 
+#[derive(Debug)]
 pub struct ConfigBounds<T> {
     pub min: T,
     pub max: T,
@@ -345,13 +358,12 @@ pub enum ConfigKind {
     MonoBin,
 }
 
+#[derive(Debug)]
 pub struct AllConfigBounds {
     /// exposure time(unit: us)
     pub exposure: ConfigBounds<i64>,
     pub gain: ConfigBounds<i64>,
     pub hardware_bin: ConfigBounds<i64>,
-    /// camera temperature (Celsius)
-    pub temperature: ConfigBounds<f64>,
     /// red pixels coefficient of white balance
     pub wb_r: ConfigBounds<i64>,
     /// green pixels coefficient of white balance
@@ -365,18 +377,18 @@ pub struct AllConfigBounds {
     pub auto_max_exposure: ConfigBounds<i64>,
     /// target brightness when auto-adjust
     pub auto_target_brightness: ConfigBounds<i64>,
-    /// cooler power percentage[0-100%]
-    pub cooler_power: ConfigBounds<i64>,
-    /// camera target temperature (Celsius)
-    pub target_temp: ConfigBounds<i64>,
-    /// heater power percentage[0-100%]
-    pub heater_power: ConfigBounds<i64>,
-    /// radiator fan power percentage[0-100%]
-    pub fan_power: ConfigBounds<i64>,
     /// frame rate limit, the range:[0, 2000], 0 means no limit
     pub frame_limit: ConfigBounds<i64>,
     /// USB bandwidth limit [0, 100]%, default is 90
     pub usb_bandwidth_limit: ConfigBounds<i64>,
+    /// cooler power percentage[0-100%]
+    pub cooler_power: Option<ConfigBounds<i64>>,
+    /// camera target temperature (Celsius)
+    pub target_temperature: Option<ConfigBounds<i64>>,
+    /// heater power percentage[0-100%]
+    pub heater_power: Option<ConfigBounds<i64>>,
+    /// radiator fan power percentage[0-100%]
+    pub fan_power: Option<ConfigBounds<i64>>,
 }
 
 impl From<Vec<POAConfigAttributes>> for AllConfigBounds {
@@ -384,7 +396,6 @@ impl From<Vec<POAConfigAttributes>> for AllConfigBounds {
         let mut exposure: Option<ConfigBounds<i64>> = None;
         let mut gain: Option<ConfigBounds<i64>> = None;
         let mut hardware_bin: Option<ConfigBounds<i64>> = None;
-        let mut temperature: Option<ConfigBounds<f64>> = None;
         let mut wb_r: Option<ConfigBounds<i64>> = None;
         let mut wb_g: Option<ConfigBounds<i64>> = None;
         let mut wb_b: Option<ConfigBounds<i64>> = None;
@@ -410,9 +421,6 @@ impl From<Vec<POAConfigAttributes>> for AllConfigBounds {
                 }
                 ConfigKind::HardwareBin => {
                     hardware_bin = Some(ConfigBounds::from(value));
-                }
-                ConfigKind::Temperature => {
-                    temperature = Some(ConfigBounds::from(value));
                 }
                 ConfigKind::WbR => {
                     wb_r = Some(ConfigBounds::from(value));
@@ -461,7 +469,6 @@ impl From<Vec<POAConfigAttributes>> for AllConfigBounds {
             exposure: exposure.expect("exposure is not found"),
             gain: gain.expect("gain is not found"),
             hardware_bin: hardware_bin.expect("hardware_bin is not found"),
-            temperature: temperature.expect("temperature is not found"),
             wb_r: wb_r.expect("wb_r is not found"),
             wb_g: wb_g.expect("wb_g is not found"),
             wb_b: wb_b.expect("wb_b is not found"),
@@ -469,10 +476,10 @@ impl From<Vec<POAConfigAttributes>> for AllConfigBounds {
             auto_max_gain: autoexpo_max_gain.expect("autoexpo_max_gain is not found"),
             auto_max_exposure: autoexpo_max_exposure.expect("autoexpo_max_exposure is not found"),
             auto_target_brightness: autoexpo_brightness.expect("autoexpo_brightness is not found"),
-            cooler_power: cooler_power.expect("cooler_power is not found"),
-            target_temp: target_temp.expect("target_temp is not found"),
-            heater_power: heater_power.expect("heater_power is not found"),
-            fan_power: fan_power.expect("fan_power is not found"),
+            cooler_power,
+            target_temperature: target_temp,
+            heater_power,
+            fan_power,
             frame_limit: frame_limit.expect("frame_limit is not found"),
             usb_bandwidth_limit: usb_bandwidth_limit.expect("usb_bandwidth_limit is not found"),
         }

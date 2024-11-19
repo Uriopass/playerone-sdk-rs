@@ -2,4 +2,4 @@
 
 Wrapper for the [Player One SDK](https://player-one-astronomy.com/service/software) in Rust.
 
-See examples for usage.
+See `playerone-sdk/examples` for usage.

@@ -1,26 +1,40 @@
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use bindgen::EnumVariation;
 
 const HEADER_PATH: &str = "libs/PlayerOneCamera.h";
 
 fn main() {
-    if cfg!(target_os = "windows") {
-        unimplemented!("Windows is not supported yet");
-    } else if cfg!(target_os = "linux") {
-        if cfg!(target_arch = "aarch64") {
-            println!("cargo:rustc-link-search=native=libs/linux/arm64");
-        } else if cfg!(target_arch = "x86_64") {
-            println!("cargo:rustc-link-search=native=libs/linux/x64");
-        } else {
-            panic!("Unsupported architecture");
+    let dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let path = Path::new(&dir).join("libs");
+
+    match env::consts::OS {
+        "windows" => unimplemented!("Windows is not supported yet"),
+        "linux" => match env::consts::ARCH {
+            "aarch64" => {
+                println!(
+                    "cargo:rustc-link-search=native={}",
+                    path.join("linux").join("arm64").display()
+                );
+            }
+            "x86_64" => {
+                println!(
+                    "cargo:rustc-link-search=native={}",
+                    path.join("linux").join("x64").display()
+                );
+            }
+            _ => unimplemented!("Unsupported architecture"),
+        },
+        "macos" => {
+            println!(
+                "cargo:rustc-link-search=native={}",
+                path.join("mac").display()
+            );
         }
-    } else if cfg!(target_os = "macos") {
-        println!("cargo:rustc-link-search=native=libs/mac");
-    } else {
-        unimplemented!("Unsupported OS");
+        _ => unimplemented!("Unsupported OS"),
     }
+
     println!("cargo:rustc-link-lib=static=PlayerOneCamera_Static");
 
     let bindings = bindgen::Builder::default()

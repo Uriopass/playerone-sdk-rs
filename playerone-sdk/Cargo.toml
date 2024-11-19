@@ -5,3 +5,9 @@ edition = "2021"
 
 [dependencies]
 playerone-sdk-sys = { path = "../playerone-sdk-sys" }
+
+[dev-dependencies]
+image = { version = "0.25.5", features = ["png"] }
+
+[[example]]
+name = "single_frame"
