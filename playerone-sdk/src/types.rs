@@ -1,8 +1,9 @@
 use std::ffi::CStr;
+use std::fmt::{Display, Formatter};
 
 use playerone_sdk_sys::{
     _POABayerPattern, _POACameraProperties, _POAConfig, _POAImgFormat, _POAValueType, POABool,
-    POAConfig, POAConfigAttributes, POAImgFormat,
+    POAConfig, POAConfigAttributes, POAErrors, POAImgFormat,
 };
 
 #[derive(Debug, Clone)]
@@ -117,7 +118,7 @@ impl From<_POACameraProperties> for CameraProperties {
 
 #[repr(i32)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum ImgFormat {
+pub enum ImageFormat {
     /// 8bit raw data, 1 pixel 1 byte, value range[0, 255]
     RAW8,
     /// 16bit raw data, 1 pixel 2 bytes, value range[0, 65535]
@@ -128,9 +129,9 @@ pub enum ImgFormat {
     MONO8,
 }
 
-impl From<_POAImgFormat> for ImgFormat {
+impl From<_POAImgFormat> for ImageFormat {
     fn from(value: _POAImgFormat) -> Self {
-        use ImgFormat::*;
+        use ImageFormat::*;
         use _POAImgFormat::*;
         match value {
             POA_RAW8 => RAW8,
@@ -142,9 +143,9 @@ impl From<_POAImgFormat> for ImgFormat {
     }
 }
 
-impl Into<_POAImgFormat> for ImgFormat {
+impl Into<_POAImgFormat> for ImageFormat {
     fn into(self) -> _POAImgFormat {
-        use ImgFormat::*;
+        use ImageFormat::*;
         use _POAImgFormat::*;
         match self {
             RAW8 => POA_RAW8,
@@ -184,14 +185,10 @@ impl From<_POABayerPattern> for BayerPattern {
     }
 }
 
-pub struct ConfigAttribute<T> {
-    pub kind: ConfigKind,
-    pub is_support_auto: bool,
-    pub is_writable: bool,
-    pub is_readable: bool,
-    min: T,
-    max: T,
-    default: T,
+pub struct ConfigBounds<T> {
+    pub min: T,
+    pub max: T,
+    pub default: T,
     pub conf_name: String,
     pub description: String,
 }
@@ -260,15 +257,11 @@ impl FromAttribute for bool {
     }
 }
 
-impl<T: FromAttribute> From<POAConfigAttributes> for ConfigAttribute<T> {
+impl<T: FromAttribute> From<POAConfigAttributes> for ConfigBounds<T> {
     fn from(value: POAConfigAttributes) -> Self {
         let (min, max, default) = T::from_attribute(value);
 
         Self {
-            kind: value.configID.into(),
-            is_support_auto: value.isSupportAuto == POABool::POA_TRUE,
-            is_writable: value.isWritable == POABool::POA_TRUE,
-            is_readable: value.isReadable == POABool::POA_TRUE,
             min,
             max,
             default,
@@ -352,170 +345,115 @@ pub enum ConfigKind {
     MonoBin,
 }
 
-pub struct AllConfigAttributes {
-    pub exposure: ConfigAttribute<i64>,
-    pub gain: ConfigAttribute<f64>,
-    pub hardware_bin: ConfigAttribute<i64>,
-    pub temperature: ConfigAttribute<f64>,
-    pub wb_r: ConfigAttribute<f64>,
-    pub wb_g: ConfigAttribute<f64>,
-    pub wb_b: ConfigAttribute<f64>,
-    pub offset: ConfigAttribute<i64>,
-    pub autoexpo_max_gain: ConfigAttribute<f64>,
-    pub autoexpo_max_exposure: ConfigAttribute<i64>,
-    pub autoexpo_brightness: ConfigAttribute<i64>,
-    pub guide_north: ConfigAttribute<i64>,
-    pub guide_south: ConfigAttribute<i64>,
-    pub guide_east: ConfigAttribute<i64>,
-    pub guide_west: ConfigAttribute<i64>,
-    pub egain: ConfigAttribute<f64>,
-    pub cooler_power: ConfigAttribute<i64>,
-    pub target_temp: ConfigAttribute<i64>,
-    pub cooler: ConfigAttribute<bool>,
-    pub heater: ConfigAttribute<bool>,
-    pub heater_power: ConfigAttribute<i64>,
-    pub fan_power: ConfigAttribute<i64>,
-    pub flip_none: ConfigAttribute<bool>,
-    pub flip_hori: ConfigAttribute<bool>,
-    pub flip_vert: ConfigAttribute<bool>,
-    pub flip_both: ConfigAttribute<bool>,
-    pub frame_limit: ConfigAttribute<i64>,
-    pub hqi: ConfigAttribute<bool>,
-    pub usb_bandwidth_limit: ConfigAttribute<i64>,
-    pub pixel_bin_sum: ConfigAttribute<bool>,
-    pub mono_bin: ConfigAttribute<bool>,
+pub struct AllConfigBounds {
+    /// exposure time(unit: us)
+    pub exposure: ConfigBounds<i64>,
+    pub gain: ConfigBounds<i64>,
+    pub hardware_bin: ConfigBounds<i64>,
+    /// camera temperature (Celsius)
+    pub temperature: ConfigBounds<f64>,
+    /// red pixels coefficient of white balance
+    pub wb_r: ConfigBounds<i64>,
+    /// green pixels coefficient of white balance
+    pub wb_g: ConfigBounds<i64>,
+    /// blue pixels coefficient of white balance
+    pub wb_b: ConfigBounds<i64>,
+    pub offset: ConfigBounds<i64>,
+    /// maximum gain when auto-adjust
+    pub auto_max_gain: ConfigBounds<i64>,
+    /// maximum exposure when auto-adjust(unit: ms)
+    pub auto_max_exposure: ConfigBounds<i64>,
+    /// target brightness when auto-adjust
+    pub auto_target_brightness: ConfigBounds<i64>,
+    /// cooler power percentage[0-100%]
+    pub cooler_power: ConfigBounds<i64>,
+    /// camera target temperature (Celsius)
+    pub target_temp: ConfigBounds<i64>,
+    /// heater power percentage[0-100%]
+    pub heater_power: ConfigBounds<i64>,
+    /// radiator fan power percentage[0-100%]
+    pub fan_power: ConfigBounds<i64>,
+    /// frame rate limit, the range:[0, 2000], 0 means no limit
+    pub frame_limit: ConfigBounds<i64>,
+    /// USB bandwidth limit [0, 100]%, default is 90
+    pub usb_bandwidth_limit: ConfigBounds<i64>,
 }
 
-impl From<Vec<POAConfigAttributes>> for AllConfigAttributes {
+impl From<Vec<POAConfigAttributes>> for AllConfigBounds {
     fn from(values: Vec<POAConfigAttributes>) -> Self {
-        let mut exposure: Option<ConfigAttribute<i64>> = None;
-        let mut gain: Option<ConfigAttribute<f64>> = None;
-        let mut hardware_bin: Option<ConfigAttribute<i64>> = None;
-        let mut temperature: Option<ConfigAttribute<f64>> = None;
-        let mut wb_r: Option<ConfigAttribute<f64>> = None;
-        let mut wb_g: Option<ConfigAttribute<f64>> = None;
-        let mut wb_b: Option<ConfigAttribute<f64>> = None;
-        let mut offset: Option<ConfigAttribute<i64>> = None;
-        let mut autoexpo_max_gain: Option<ConfigAttribute<f64>> = None;
-        let mut autoexpo_max_exposure: Option<ConfigAttribute<i64>> = None;
-        let mut autoexpo_brightness: Option<ConfigAttribute<i64>> = None;
-        let mut guide_north: Option<ConfigAttribute<i64>> = None;
-        let mut guide_south: Option<ConfigAttribute<i64>> = None;
-        let mut guide_east: Option<ConfigAttribute<i64>> = None;
-        let mut guide_west: Option<ConfigAttribute<i64>> = None;
-        let mut egain: Option<ConfigAttribute<f64>> = None;
-        let mut cooler_power: Option<ConfigAttribute<i64>> = None;
-        let mut target_temp: Option<ConfigAttribute<i64>> = None;
-        let mut cooler: Option<ConfigAttribute<bool>> = None;
-        let mut heater: Option<ConfigAttribute<bool>> = None;
-        let mut heater_power: Option<ConfigAttribute<i64>> = None;
-        let mut fan_power: Option<ConfigAttribute<i64>> = None;
-        let mut flip_none: Option<ConfigAttribute<bool>> = None;
-        let mut flip_hori: Option<ConfigAttribute<bool>> = None;
-        let mut flip_vert: Option<ConfigAttribute<bool>> = None;
-        let mut flip_both: Option<ConfigAttribute<bool>> = None;
-        let mut frame_limit: Option<ConfigAttribute<i64>> = None;
-        let mut hqi: Option<ConfigAttribute<bool>> = None;
-        let mut usb_bandwidth_limit: Option<ConfigAttribute<i64>> = None;
-        let mut pixel_bin_sum: Option<ConfigAttribute<bool>> = None;
-        let mut mono_bin: Option<ConfigAttribute<bool>> = None;
+        let mut exposure: Option<ConfigBounds<i64>> = None;
+        let mut gain: Option<ConfigBounds<i64>> = None;
+        let mut hardware_bin: Option<ConfigBounds<i64>> = None;
+        let mut temperature: Option<ConfigBounds<f64>> = None;
+        let mut wb_r: Option<ConfigBounds<i64>> = None;
+        let mut wb_g: Option<ConfigBounds<i64>> = None;
+        let mut wb_b: Option<ConfigBounds<i64>> = None;
+        let mut offset: Option<ConfigBounds<i64>> = None;
+        let mut autoexpo_max_gain: Option<ConfigBounds<i64>> = None;
+        let mut autoexpo_max_exposure: Option<ConfigBounds<i64>> = None;
+        let mut autoexpo_brightness: Option<ConfigBounds<i64>> = None;
+        let mut cooler_power: Option<ConfigBounds<i64>> = None;
+        let mut target_temp: Option<ConfigBounds<i64>> = None;
+        let mut heater_power: Option<ConfigBounds<i64>> = None;
+        let mut fan_power: Option<ConfigBounds<i64>> = None;
+        let mut frame_limit: Option<ConfigBounds<i64>> = None;
+        let mut usb_bandwidth_limit: Option<ConfigBounds<i64>> = None;
 
         for value in values {
             let kind = value.configID.into();
             match kind {
                 ConfigKind::Exposure => {
-                    exposure = Some(ConfigAttribute::from(value));
+                    exposure = Some(ConfigBounds::from(value));
                 }
                 ConfigKind::Gain => {
-                    gain = Some(ConfigAttribute::from(value));
+                    gain = Some(ConfigBounds::from(value));
                 }
                 ConfigKind::HardwareBin => {
-                    hardware_bin = Some(ConfigAttribute::from(value));
+                    hardware_bin = Some(ConfigBounds::from(value));
                 }
                 ConfigKind::Temperature => {
-                    temperature = Some(ConfigAttribute::from(value));
+                    temperature = Some(ConfigBounds::from(value));
                 }
                 ConfigKind::WbR => {
-                    wb_r = Some(ConfigAttribute::from(value));
+                    wb_r = Some(ConfigBounds::from(value));
                 }
                 ConfigKind::WbG => {
-                    wb_g = Some(ConfigAttribute::from(value));
+                    wb_g = Some(ConfigBounds::from(value));
                 }
                 ConfigKind::WbB => {
-                    wb_b = Some(ConfigAttribute::from(value));
+                    wb_b = Some(ConfigBounds::from(value));
                 }
                 ConfigKind::Offset => {
-                    offset = Some(ConfigAttribute::from(value));
+                    offset = Some(ConfigBounds::from(value));
                 }
                 ConfigKind::AutoexpoMaxGain => {
-                    autoexpo_max_gain = Some(ConfigAttribute::from(value));
+                    autoexpo_max_gain = Some(ConfigBounds::from(value));
                 }
                 ConfigKind::AutoexpoMaxExposure => {
-                    autoexpo_max_exposure = Some(ConfigAttribute::from(value));
+                    autoexpo_max_exposure = Some(ConfigBounds::from(value));
                 }
                 ConfigKind::AutoexpoBrightness => {
-                    autoexpo_brightness = Some(ConfigAttribute::from(value));
-                }
-                ConfigKind::GuideNorth => {
-                    guide_north = Some(ConfigAttribute::from(value));
-                }
-                ConfigKind::GuideSouth => {
-                    guide_south = Some(ConfigAttribute::from(value));
-                }
-                ConfigKind::GuideEast => {
-                    guide_east = Some(ConfigAttribute::from(value));
-                }
-                ConfigKind::GuideWest => {
-                    guide_west = Some(ConfigAttribute::from(value));
-                }
-                ConfigKind::Egain => {
-                    egain = Some(ConfigAttribute::from(value));
+                    autoexpo_brightness = Some(ConfigBounds::from(value));
                 }
                 ConfigKind::CoolerPower => {
-                    cooler_power = Some(ConfigAttribute::from(value));
+                    cooler_power = Some(ConfigBounds::from(value));
                 }
                 ConfigKind::TargetTemp => {
-                    target_temp = Some(ConfigAttribute::from(value));
-                }
-                ConfigKind::Cooler => {
-                    cooler = Some(ConfigAttribute::from(value));
-                }
-                ConfigKind::Heater => {
-                    heater = Some(ConfigAttribute::from(value));
+                    target_temp = Some(ConfigBounds::from(value));
                 }
                 ConfigKind::HeaterPower => {
-                    heater_power = Some(ConfigAttribute::from(value));
+                    heater_power = Some(ConfigBounds::from(value));
                 }
                 ConfigKind::FanPower => {
-                    fan_power = Some(ConfigAttribute::from(value));
-                }
-                ConfigKind::FlipNone => {
-                    flip_none = Some(ConfigAttribute::from(value));
-                }
-                ConfigKind::FlipHori => {
-                    flip_hori = Some(ConfigAttribute::from(value));
-                }
-                ConfigKind::FlipVert => {
-                    flip_vert = Some(ConfigAttribute::from(value));
-                }
-                ConfigKind::FlipBoth => {
-                    flip_both = Some(ConfigAttribute::from(value));
+                    fan_power = Some(ConfigBounds::from(value));
                 }
                 ConfigKind::FrameLimit => {
-                    frame_limit = Some(ConfigAttribute::from(value));
-                }
-                ConfigKind::Hqi => {
-                    hqi = Some(ConfigAttribute::from(value));
+                    frame_limit = Some(ConfigBounds::from(value));
                 }
                 ConfigKind::UsbBandwidthLimit => {
-                    usb_bandwidth_limit = Some(ConfigAttribute::from(value));
+                    usb_bandwidth_limit = Some(ConfigBounds::from(value));
                 }
-                ConfigKind::PixelBinSum => {
-                    pixel_bin_sum = Some(ConfigAttribute::from(value));
-                }
-                ConfigKind::MonoBin => {
-                    mono_bin = Some(ConfigAttribute::from(value));
-                }
+                _ => {}
             }
         }
 
@@ -528,30 +466,15 @@ impl From<Vec<POAConfigAttributes>> for AllConfigAttributes {
             wb_g: wb_g.expect("wb_g is not found"),
             wb_b: wb_b.expect("wb_b is not found"),
             offset: offset.expect("offset is not found"),
-            autoexpo_max_gain: autoexpo_max_gain.expect("autoexpo_max_gain is not found"),
-            autoexpo_max_exposure: autoexpo_max_exposure
-                .expect("autoexpo_max_exposure is not found"),
-            autoexpo_brightness: autoexpo_brightness.expect("autoexpo_brightness is not found"),
-            guide_north: guide_north.expect("guide_north is not found"),
-            guide_south: guide_south.expect("guide_south is not found"),
-            guide_east: guide_east.expect("guide_east is not found"),
-            guide_west: guide_west.expect("guide_west is not found"),
-            egain: egain.expect("egain is not found"),
+            auto_max_gain: autoexpo_max_gain.expect("autoexpo_max_gain is not found"),
+            auto_max_exposure: autoexpo_max_exposure.expect("autoexpo_max_exposure is not found"),
+            auto_target_brightness: autoexpo_brightness.expect("autoexpo_brightness is not found"),
             cooler_power: cooler_power.expect("cooler_power is not found"),
             target_temp: target_temp.expect("target_temp is not found"),
-            cooler: cooler.expect("cooler is not found"),
-            heater: heater.expect("heater is not found"),
             heater_power: heater_power.expect("heater_power is not found"),
             fan_power: fan_power.expect("fan_power is not found"),
-            flip_none: flip_none.expect("flip_none is not found"),
-            flip_hori: flip_hori.expect("flip_hori is not found"),
-            flip_vert: flip_vert.expect("flip_vert is not found"),
-            flip_both: flip_both.expect("flip_both is not found"),
             frame_limit: frame_limit.expect("frame_limit is not found"),
-            hqi: hqi.expect("hqi is not found"),
             usb_bandwidth_limit: usb_bandwidth_limit.expect("usb_bandwidth_limit is not found"),
-            pixel_bin_sum: pixel_bin_sum.expect("pixel_bin_sum is not found"),
-            mono_bin: mono_bin.expect("mono_bin is not found"),
         }
     }
 }
@@ -592,6 +515,89 @@ impl From<POAConfig> for ConfigKind {
             POA_USB_BANDWIDTH_LIMIT => UsbBandwidthLimit,
             POA_PIXEL_BIN_SUM => PixelBinSum,
             POA_MONO_BIN => MonoBin,
+        }
+    }
+}
+
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum Error {
+    /// invalid index, means the index is < 0 or >= the count( camera or config)
+    InvalidIndex,
+    InvalidCameraId,
+    InvalidConfig,
+    InvalidArgument,
+    NotOpened,
+    DeviceNotFound,
+    OutOfBounds,
+    ExposureFailed,
+    Timeout,
+    BufferSizeTooSmall,
+    /// camera is exposing. must stop exposure first
+    Exposing,
+    NullPointer,
+    ConfigNotWritable,
+    ConfigNotReadable,
+    AccessDenied,
+    /// maybe the camera disconnected suddenly
+    OperationFailed,
+    MemoryAllocationFailed,
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        use Error::*;
+        write!(
+            f,
+            "{}",
+            match self {
+                InvalidIndex => "invalid index",
+                InvalidCameraId => "invalid camera id",
+                InvalidConfig => "invalid config",
+                InvalidArgument => "invalid argument",
+                NotOpened => "camera is not opened",
+                DeviceNotFound => "device not found",
+                OutOfBounds => "out of bounds",
+                ExposureFailed => "exposure failed",
+                Timeout => "timeout",
+                BufferSizeTooSmall => "buffer size too small",
+                Exposing => "camera is exposing",
+                NullPointer => "null pointer",
+                ConfigNotWritable => "config is not writable",
+                ConfigNotReadable => "config is not readable",
+                AccessDenied => "access denied",
+                OperationFailed => "operation failed",
+                MemoryAllocationFailed => "memory allocation failed",
+            }
+        )
+    }
+}
+
+impl std::error::Error for Error {}
+
+impl From<POAErrors> for Error {
+    fn from(value: POAErrors) -> Self {
+        use Error::*;
+        use POAErrors::*;
+        match value {
+            POA_OK => unreachable!("POA_OK should have been checked before"),
+            POA_ERROR_INVALID_INDEX => InvalidIndex,
+            POA_ERROR_INVALID_ID => InvalidCameraId,
+            POA_ERROR_INVALID_CONFIG => InvalidConfig,
+            POA_ERROR_INVALID_ARGU => InvalidArgument,
+            POA_ERROR_NOT_OPENED => NotOpened,
+            POA_ERROR_DEVICE_NOT_FOUND => DeviceNotFound,
+            POA_ERROR_OUT_OF_LIMIT => OutOfBounds,
+            POA_ERROR_EXPOSURE_FAILED => ExposureFailed,
+            POA_ERROR_TIMEOUT => Timeout,
+            POA_ERROR_SIZE_LESS => BufferSizeTooSmall,
+            POA_ERROR_EXPOSING => Exposing,
+            POA_ERROR_POINTER => NullPointer,
+            POA_ERROR_CONF_CANNOT_WRITE => ConfigNotWritable,
+            POA_ERROR_CONF_CANNOT_READ => ConfigNotReadable,
+            POA_ERROR_ACCESS_DENIED => AccessDenied,
+            POA_ERROR_OPERATION_FAILED => OperationFailed,
+            POA_ERROR_MEMORY_FAILED => MemoryAllocationFailed,
         }
     }
 }
