@@ -1230,7 +1230,7 @@ checksum = "953ec861398dccce10c670dfeaf3ec4911ca479e9c02154b3a215178c5f566f2"
 
 [[package]]
 name = "playerone-sdk"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "image",
  "playerone-sdk-sys 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",

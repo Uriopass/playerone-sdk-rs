@@ -1,3 +1,12 @@
+# Player One SDK
+
+Wrapper for the [Player One Camera SDK](https://player-one-astronomy.com/service/software).
+
+See `examples` for usage.
+
+Here's a minimal one for reference:
+
+```rust
 pub fn main() {
     let camera_description = playerone_sdk::Camera::all_cameras()
         .into_iter()
@@ -5,7 +14,6 @@ pub fn main() {
         .expect("No cameras found");
 
     let mut camera = camera_description.open().expect("opening camera");
-
     println!("camera properties:\n{:#?}\n", camera.properties());
 
     let bounds = camera.config_bounds();
@@ -38,3 +46,4 @@ pub fn main() {
 
     img.save("camera_frame.png").expect("saving to file failed");
 }
+```
