@@ -12,7 +12,6 @@ pub struct CameraProperties {
     pub camera_model_name: String,
     /// user custom name, it will be added after the camera name, max len 16 bytes,like:Mars-C [Juno], default is empty
     pub user_custom_id: String,
-    /// it's unique,camera can be controlled and set by the cameraID
     pub camera_id: u32,
     /// max width of the camera
     pub max_width: u32,
@@ -32,9 +31,9 @@ pub struct CameraProperties {
     pub bayer_pattern: BayerPattern,
     /// camera pixel size(unit: um)
     pub pixel_size: f64,
-    /// the serial number of camera,it's unique
+    /// the serial number of camera, unique
     pub serial_number: String,
-    /// the sersor model(name) of camera, eg: IMX462
+    /// the sensor model name, eg: IMX462
     pub sensor_model_name: String,
     /// the path of the camera in the computer host
     pub local_path: String,
@@ -42,9 +41,9 @@ pub struct CameraProperties {
     pub bins: Vec<u32>,
     /// image data format supported by the camera
     pub img_formats: Vec<POAImgFormat>,
-    /// does the camera sensor support hardware bin (since V3.3.0)
+    /// does the camera sensor support hardware bin
     pub is_support_hard_bin: bool,
-    /// camera's Product ID, note: the vID of PlayerOne is 0xA0A0 (since V3.3.0)
+    /// camera's Product ID, note: the vID of PlayerOne is 0xA0A0
     pub product_id: i32,
 }
 

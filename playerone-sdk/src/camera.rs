@@ -10,7 +10,6 @@ use playerone_sdk_sys::{
 };
 use playerone_sdk_sys::POABool::{POA_FALSE, POA_TRUE};
 use playerone_sdk_sys::POAConfig::{POA_EXPOSURE, POA_GAIN};
-use playerone_sdk_sys::POAErrors::POA_OK;
 
 use crate::{AllConfigBounds, CameraProperties, Error, ImageFormat};
 
@@ -19,10 +18,10 @@ type POAResult<T> = Result<T, Error>;
 /// Region Of Interest
 #[derive(Debug, Copy, Clone)]
 pub struct ROI {
-    pub start_x: i32,
-    pub start_y: i32,
-    pub width: i32,
-    pub height: i32,
+    pub start_x: u32,
+    pub start_y: u32,
+    pub width: u32,
+    pub height: u32,
 }
 
 /// Description of a camera
@@ -221,6 +220,8 @@ impl Camera {
         Ok(())
     }
 
+    /// Returns the bounds of all the configurations available for this camera
+    /// This is an expensive operation and should not be called frequently
     pub fn config_bounds(&self) -> AllConfigBounds {
         let mut config_count = 0;
         safe_error(unsafe { POAGetConfigsCount(self.camera_id, &mut config_count) });
@@ -240,38 +241,22 @@ impl Camera {
 
     /// Sets the Region Of Interest
     pub fn set_roi(&mut self, roi_area: &ROI) -> POAResult<()> {
-        let error = unsafe { POASetImageSize(self.camera_id, roi_area.width, roi_area.height) };
-        if error != _POAErrors::POA_OK {
-            return Err(error.into());
-        }
-
-        let error =
-            unsafe { POASetImageStartPos(self.camera_id, roi_area.start_x, roi_area.start_y) };
-        if error != _POAErrors::POA_OK {
-            return Err(error.into());
-        }
-
+        self.set_image_size(roi_area.width, roi_area.height)?;
+        self.set_image_start_pos(roi_area.start_x, roi_area.start_y)?;
         Ok(())
     }
 
     /// Gets the Region Of Interest
     pub fn roi(&self) -> ROI {
-        let mut roi_area = ROI {
-            start_x: 0,
-            start_y: 0,
-            width: 0,
-            height: 0,
-        };
+        let start_pos = self.image_start_pos().unwrap();
+        let size = self.image_size();
 
-        safe_error(unsafe {
-            POAGetImageStartPos(self.camera_id, &mut roi_area.start_x, &mut roi_area.start_y)
-        });
-
-        safe_error(unsafe {
-            POAGetImageSize(self.camera_id, &mut roi_area.width, &mut roi_area.height)
-        });
-
-        roi_area
+        ROI {
+            start_x: start_pos.0,
+            start_y: start_pos.1,
+            width: size.0,
+            height: size.1,
+        }
     }
 
     /// Must be within max_width and max_height as specified in the camera properties
@@ -289,17 +274,27 @@ impl Camera {
 
     /// Returns the current image size
     /// This may change if the binning factor is changed
-    pub fn image_size(&self) -> (i32, i32) {
+    pub fn image_size(&self) -> (u32, u32) {
         let mut width = 0;
         let mut height = 0;
 
         safe_error(unsafe { POAGetImageSize(self.camera_id, &mut width, &mut height) });
-        (width, height)
+
+        if width < 0 || height < 0 {
+            panic!("negative image size: {} {}", width, height);
+        }
+
+        (width as u32, height as u32)
     }
 
     /// Sets the offset/anchor/start position in the image
-    pub fn set_image_start_pos(&mut self, start_x: i32, start_y: i32) -> POAResult<()> {
-        let error = unsafe { POASetImageStartPos(self.camera_id, start_x, start_y) };
+    pub fn set_image_start_pos(&mut self, start_x: u32, start_y: u32) -> POAResult<()> {
+        if start_x > self.properties.max_width || start_y > self.properties.max_height {
+            return Err(Error::OutOfBounds);
+        }
+
+        let error =
+            unsafe { POASetImageStartPos(self.camera_id, start_x as c_int, start_y as c_int) };
         if error != _POAErrors::POA_OK {
             return Err(error.into());
         }
@@ -308,12 +303,17 @@ impl Camera {
 
     /// Returns the current image start position
     /// This may change if the binning factor is changed
-    pub fn image_start_pos(&self) -> POAResult<(i32, i32)> {
+    pub fn image_start_pos(&self) -> POAResult<(u32, u32)> {
         let mut start_x = 0;
         let mut start_y = 0;
 
         safe_error(unsafe { POAGetImageStartPos(self.camera_id, &mut start_x, &mut start_y) });
-        Ok((start_x, start_y))
+
+        if start_x < 0 || start_y < 0 {
+            panic!("negative image start position: {} {}", start_x, start_y);
+        }
+
+        Ok((start_x as u32, start_y as u32))
     }
 
     pub fn set_image_format(&mut self, image_format: ImageFormat) -> POAResult<()> {
@@ -345,7 +345,7 @@ impl Camera {
         }
 
         let err = unsafe { POASetImageBin(self.camera_id, bin as c_int) };
-        if err != POA_OK {
+        if err != _POAErrors::POA_OK {
             return Err(err.into());
         }
         Ok(())
@@ -673,7 +673,7 @@ impl Camera {
 /// a lot of functions should never fail by construction: pointer are not null, camera_id is valid
 /// and camera is open! so we can safely ignore a lot of api errors
 fn safe_error(error: POAErrors) {
-    if error == POA_OK {
+    if error == _POAErrors::POA_OK {
         return;
     }
     panic!("unexpected POA error: {}", Error::from(error));

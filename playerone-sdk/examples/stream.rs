@@ -25,14 +25,23 @@ pub fn main() {
         .set_auto_target_brightness(5)
         .expect("setting auto target brightness");
 
-    let (camera_w, camera_h) = (
-        camera.properties().max_width,
-        camera.properties().max_height,
-    );
-
     camera
-        .set_image_size(camera_w, camera_h)
+        .set_image_size(
+            camera.properties().max_width,
+            camera.properties().max_height,
+        )
         .expect("setting image size");
+
+    if camera.properties().is_support_hard_bin {
+        camera.set_hardware_bin(true).expect("setting hardware bin");
+    }
+
+    // this changes the image size
+    camera.set_bin(2).expect("setting bin");
+
+    eprintln!("camera image size: {:?}", camera.image_size());
+
+    let (camera_w, camera_h) = camera.image_size();
 
     let (tx, rx) = std::sync::mpsc::channel();
 
@@ -256,7 +265,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             queue: Arc<wgpu::Queue>,
             surface: wgpu::Surface<'static>,
             config: SurfaceConfiguration,
-            camera_texture: Arc<wgpu::Texture>,
 
             blit_pipeline: wgpu::RenderPipeline,
             blit_bg: wgpu::BindGroup,
@@ -281,19 +289,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                         self.config.height = height;
 
                         self.surface.configure(&self.device, &self.config);
-                        eprintln!("resized");
                     }
                     WindowEvent::RedrawRequested => {
                         if let Some(ref mut last) = self.last_v {
-                            let now = Instant::now();
-                            let elapsed = now - *last;
-                            let fps = 1.0 / elapsed.as_secs_f64();
                             self.i += 1;
                             if self.i == 100 {
                                 self.i = 0;
+                                let fps = 100.0 / last.elapsed().as_secs_f64();
+                                *last = Instant::now();
                                 println!("FPS: {:.2}", fps);
                             }
-                            *last = now;
                         } else {
                             self.last_v = Some(Instant::now());
                         }
@@ -368,7 +373,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 queue,
                 surface,
                 config,
-                camera_texture,
                 blit_pipeline,
                 blit_bg,
                 i: 0,
