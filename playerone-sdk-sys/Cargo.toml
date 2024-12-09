@@ -2,6 +2,9 @@
 name = "playerone-sdk-sys"
 version = "0.1.0"
 edition = "2021"
+description = "PlayerOne SDK bindings"
+license = "MIT"
+repository = "https://github.com/Uriopass/playerone-sdk-rs"
 
 [dependencies]
 
