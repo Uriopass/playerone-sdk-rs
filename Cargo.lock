@@ -1233,7 +1233,7 @@ name = "playerone-sdk"
 version = "0.1.0"
 dependencies = [
  "image",
- "playerone-sdk-sys",
+ "playerone-sdk-sys 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pollster",
  "wgpu",
  "winit",
@@ -1242,6 +1242,15 @@ dependencies = [
 [[package]]
 name = "playerone-sdk-sys"
 version = "0.1.0"
+dependencies = [
+ "bindgen",
+]
+
+[[package]]
+name = "playerone-sdk-sys"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc0830145d1cc7ff069e0cd8523b237e20a6322f29983daca9a3c85020797df1"
 dependencies = [
  "bindgen",
 ]
