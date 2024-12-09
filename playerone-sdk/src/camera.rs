@@ -4,9 +4,9 @@ use playerone_sdk_sys::{
     _POABool as POABool, _POAConfig as POAConfig, _POAErrors, _POAImgFormat as POAImgFormat, FromPOAConfigValue,
     POACameraProperties, POACloseCamera, POAConfigAttributes, POAConfigValue, POAErrors,
     POAGetCameraCount, POAGetCameraProperties, POAGetConfig, POAGetConfigAttributes, POAGetConfigsCount,
-    POAGetImageData, POAGetImageFormat, POAGetImageSize, POAGetImageStartPos, POAImageReady, POAInitCamera,
-    POAOpenCamera, POASetConfig, POASetImageFormat, POASetImageSize,
-    POASetImageStartPos, POAStartExposure, POAStopExposure,
+    POAGetImageBin, POAGetImageData, POAGetImageFormat, POAGetImageSize, POAGetImageStartPos, POAImageReady,
+    POAInitCamera, POAOpenCamera, POASetConfig, POASetImageBin, POASetImageFormat,
+    POASetImageSize, POASetImageStartPos, POAStartExposure, POAStopExposure,
 };
 use playerone_sdk_sys::POABool::{POA_FALSE, POA_TRUE};
 use playerone_sdk_sys::POAConfig::{POA_EXPOSURE, POA_GAIN};
@@ -238,8 +238,6 @@ impl Camera {
         AllConfigBounds::from(attributes)
     }
 
-    /// Camera must not be exposing when this is called
-    ///
     /// Sets the Region Of Interest
     pub fn set_roi(&mut self, roi_area: &ROI) -> POAResult<()> {
         let error = unsafe { POASetImageSize(self.camera_id, roi_area.width, roi_area.height) };
@@ -276,7 +274,7 @@ impl Camera {
         roi_area
     }
 
-    /// Must be within the bounds specified in the config
+    /// Must be within max_width and max_height as specified in the camera properties
     pub fn set_image_size(&mut self, width: u32, height: u32) -> POAResult<()> {
         if width > self.properties.max_width || height > self.properties.max_height {
             return Err(Error::OutOfBounds);
@@ -289,6 +287,8 @@ impl Camera {
         Ok(())
     }
 
+    /// Returns the current image size
+    /// This may change if the binning factor is changed
     pub fn image_size(&self) -> (i32, i32) {
         let mut width = 0;
         let mut height = 0;
@@ -306,6 +306,8 @@ impl Camera {
         Ok(())
     }
 
+    /// Returns the current image start position
+    /// This may change if the binning factor is changed
     pub fn image_start_pos(&self) -> POAResult<(i32, i32)> {
         let mut start_x = 0;
         let mut start_y = 0;
@@ -329,6 +331,31 @@ impl Camera {
 
         safe_error(unsafe { POAGetImageFormat(self.camera_id, &mut poa_img_format) });
         Ok(poa_img_format.into())
+    }
+
+    /// Sets the binning factor e.g 1, 2, 4  
+    /// Must be a bin within the available bins in properties  
+    /// The binning function can be average or sum depending on the pixel_bin_sum property (true is sum, false is average). default is average  
+    ///
+    /// Note: If successful, the image size (width & height) and start position will be changed (divided by the binning factor)  
+    /// Call image_size() and image_start_pos() to get the updated values
+    pub fn set_bin(&mut self, bin: u32) -> POAResult<()> {
+        if !self.properties.bins.contains(&bin) {
+            return Err(Error::OutOfBounds);
+        }
+
+        let err = unsafe { POASetImageBin(self.camera_id, bin as c_int) };
+        if err != POA_OK {
+            return Err(err.into());
+        }
+        Ok(())
+    }
+
+    /// Returns the current binning factor
+    pub fn bin(&self) -> u32 {
+        let mut bin = 0;
+        safe_error(unsafe { POAGetImageBin(self.camera_id, &mut bin) });
+        bin as u32
     }
 
     pub fn properties(&self) -> &CameraProperties {

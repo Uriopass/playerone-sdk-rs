@@ -363,7 +363,6 @@ pub struct AllConfigBounds {
     /// exposure time(unit: us)
     pub exposure: ConfigBounds<i64>,
     pub gain: ConfigBounds<i64>,
-    pub hardware_bin: Option<ConfigBounds<i64>>,
     /// red pixels coefficient of white balance
     pub wb_r: Option<ConfigBounds<i64>>,
     /// green pixels coefficient of white balance
@@ -396,7 +395,6 @@ impl From<Vec<POAConfigAttributes>> for AllConfigBounds {
     fn from(values: Vec<POAConfigAttributes>) -> Self {
         let mut exposure: Option<ConfigBounds<i64>> = None;
         let mut gain: Option<ConfigBounds<i64>> = None;
-        let mut hardware_bin: Option<ConfigBounds<i64>> = None;
         let mut wb_r: Option<ConfigBounds<i64>> = None;
         let mut wb_g: Option<ConfigBounds<i64>> = None;
         let mut wb_b: Option<ConfigBounds<i64>> = None;
@@ -419,9 +417,6 @@ impl From<Vec<POAConfigAttributes>> for AllConfigBounds {
                 }
                 ConfigKind::Gain => {
                     gain = Some(ConfigBounds::from(value));
-                }
-                ConfigKind::HardwareBin => {
-                    hardware_bin = Some(ConfigBounds::from(value));
                 }
                 ConfigKind::WbR => {
                     wb_r = Some(ConfigBounds::from(value));
@@ -469,7 +464,6 @@ impl From<Vec<POAConfigAttributes>> for AllConfigBounds {
         Self {
             exposure: exposure.expect("exposure is not found"),
             gain: gain.expect("gain is not found"),
-            hardware_bin,
             wb_r,
             wb_g,
             wb_b,
