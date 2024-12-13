@@ -1,3 +1,4 @@
+![Crates.io Version](https://img.shields.io/crates/v/playerone-sdk)
 # Player One SDK RS
 
 Wrapper for the [Player One SDK](https://player-one-astronomy.com/service/software) in Rust.
