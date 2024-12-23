@@ -18,8 +18,9 @@ pub fn main() {
         .set_image_format(ImageFormat::RAW8)
         .expect("setting image format");
 
-    camera.set_exposure(8000, true).expect("setting exposure");
-    camera.set_gain(200, true).expect("setting gain");
+    camera.set_exposure(1500, false).expect("setting exposure");
+    camera.set_gain(4 * 70, false).expect("setting gain");
+    camera.set_offset(0).expect("setting offset");
 
     camera
         .set_auto_target_brightness(5)
@@ -37,7 +38,7 @@ pub fn main() {
     }
 
     // this changes the image size
-    camera.set_bin(2).expect("setting bin");
+    //camera.set_bin(2).expect("setting bin");
 
     eprintln!("camera image size: {:?}", camera.image_size());
 
@@ -60,7 +61,7 @@ pub fn main() {
 }
 
 mod winit_display {
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
     use std::sync::mpsc::Receiver;
     use std::time::Instant;
 
@@ -68,6 +69,7 @@ mod winit_display {
         Features, InstanceDescriptor, MemoryHints, SurfaceConfiguration, TextureViewDescriptor,
     };
     use winit::application::ApplicationHandler;
+    use winit::dpi::LogicalSize;
     use winit::event::WindowEvent;
     use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
     use winit::window::{Window, WindowId};
@@ -78,7 +80,10 @@ mod winit_display {
         #[allow(deprecated)]
         let window = Arc::new(
             event_loop
-                .create_window(Window::default_attributes())
+                .create_window(
+                    Window::default_attributes()
+                        .with_inner_size(LogicalSize::new(camera_w, camera_h)),
+                )
                 .unwrap(),
         );
 
@@ -169,7 +174,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let dims = textureDimensions(src);
     let pos = vec2<u32>(in.frag_uv * vec2<f32>(f32(dims.x), f32(dims.y)));
     var v = textureLoad(src, pos, 0).r;
-    v = v * v;
  
     return vec4(v, v, v, 1.0);
 }
@@ -237,9 +241,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             }],
         });
 
+        let latest_pixels = Arc::new(Mutex::new(Vec::new()));
+
         std::thread::spawn({
             let queue = Arc::clone(&queue);
             let camera_texture = Arc::clone(&camera_texture);
+            let latest_pixels = Arc::clone(&latest_pixels);
             move || {
                 for pixels in camera_stream {
                     queue.write_texture(
@@ -252,6 +259,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                         },
                         camera_texture.size(),
                     );
+
+                    *latest_pixels.lock().unwrap() = pixels;
                     //queue.submit([]);
                 }
             }
@@ -268,6 +277,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
             blit_pipeline: wgpu::RenderPipeline,
             blit_bg: wgpu::BindGroup,
+            latest_pixels: Arc<Mutex<Vec<u8>>>,
+
+            camera_dims: (u32, u32),
 
             i: usize,
         }
@@ -289,6 +301,32 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                         self.config.height = height;
 
                         self.surface.configure(&self.device, &self.config);
+                    }
+                    WindowEvent::KeyboardInput {
+                        event:
+                            winit::event::KeyEvent {
+                                state: winit::event::ElementState::Pressed,
+                                logical_key,
+                                ..
+                            },
+                        ..
+                    } => {
+                        if logical_key
+                            == winit::keyboard::Key::Character(
+                                winit::keyboard::SmolStr::new_static("s"),
+                            )
+                        {
+                            let latest_pixels = self.latest_pixels.lock().unwrap();
+                            image::save_buffer(
+                                "picture.png",
+                                &latest_pixels,
+                                self.camera_dims.0,
+                                self.camera_dims.1,
+                                image::ExtendedColorType::L8,
+                            )
+                            .expect("failed to save image");
+                            drop(latest_pixels);
+                        }
                     }
                     WindowEvent::RedrawRequested => {
                         if let Some(ref mut last) = self.last_v {
@@ -375,6 +413,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 config,
                 blit_pipeline,
                 blit_bg,
+                latest_pixels,
+                camera_dims: (camera_w, camera_h),
                 i: 0,
             })
             .unwrap();
