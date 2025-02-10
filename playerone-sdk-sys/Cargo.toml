@@ -1,6 +1,6 @@
 [package]
 name = "playerone-sdk-sys"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "PlayerOne SDK bindings"
 license = "MIT"
@@ -9,4 +9,4 @@ repository = "https://github.com/Uriopass/playerone-sdk-rs"
 [dependencies]
 
 [build-dependencies]
-bindgen = "0.70.1"
+bindgen = "0.71.1"

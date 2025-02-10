@@ -777,6 +777,14 @@ POACAMERA_API const char* POAGetSDKVersion();
 /**this function for matlab**/
 POACAMERA_API  POAErrors POASetConfig_M(int nCameraID, POAConfig confID, double cfgVal, POABool isAuto);
 
+/**
+ * @brief POASetEnableDPS: set the enable of the DPS(Dead Pixel Suppression) function
+ * @return  POA_OK: operation successful
+ *          POA_ERROR_INVALID_ID: no camera with this ID was found or the ID is out of boundary
+ *          POA_ERROR_NOT_OPENED: camera not opened
+ */
+POACAMERA_API  POAErrors POASetEnableDPS(int nCameraID, const POABool *plsEnable);
+
 #ifdef __cplusplus
 }
 #endif

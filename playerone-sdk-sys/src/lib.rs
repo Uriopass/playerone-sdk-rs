@@ -64,4 +64,3 @@ unsafe impl FromPOAConfigValue for bool {
         unsafe { value.boolValue.into() }
     }
 }
-
