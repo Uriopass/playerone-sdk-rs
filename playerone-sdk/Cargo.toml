@@ -1,6 +1,6 @@
 [package]
 name = "playerone-sdk"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "PlayerOne SDK bindings"
 license = "MIT"
@@ -8,7 +8,7 @@ repository = "https://github.com/Uriopass/playerone-sdk-rs"
 readme = "README.md"
 
 [dependencies]
-playerone-sdk-sys = "0.1.0"
+playerone-sdk-sys = "0.1.1"
 
 [dev-dependencies]
 image = { version = "0.25.5", default-features = false, features = ["png"] }

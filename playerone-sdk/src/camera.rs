@@ -4,9 +4,10 @@ use playerone_sdk_sys::{
     _POABool as POABool, _POAConfig as POAConfig, _POAErrors, _POAImgFormat as POAImgFormat, FromPOAConfigValue,
     POACameraProperties, POACloseCamera, POAConfigAttributes, POAConfigValue, POAErrors,
     POAGetCameraCount, POAGetCameraProperties, POAGetConfig, POAGetConfigAttributes, POAGetConfigsCount,
-    POAGetImageBin, POAGetImageData, POAGetImageFormat, POAGetImageSize, POAGetImageStartPos, POAImageReady,
-    POAInitCamera, POAOpenCamera, POASetConfig, POASetImageBin, POASetImageFormat,
-    POASetImageSize, POASetImageStartPos, POAStartExposure, POAStopExposure,
+    POAGetImageBin, POAGetImageData, POAGetImageFormat, POAGetImageSize, POAGetImageStartPos,
+    POAImageReady, POAInitCamera, POAOpenCamera, POASetConfig, POASetEnableDPS,
+    POASetImageBin, POASetImageFormat, POASetImageSize, POASetImageStartPos, POAStartExposure,
+    POAStopExposure,
 };
 use playerone_sdk_sys::POABool::{POA_FALSE, POA_TRUE};
 use playerone_sdk_sys::POAConfig::{POA_EXPOSURE, POA_GAIN};
@@ -76,7 +77,7 @@ impl Camera {
 
         for i in 0..camera_count {
             let mut camera_prop: POACameraProperties = POACameraProperties::default();
-            let error = unsafe { POAGetCameraProperties(i, &mut camera_prop) };
+            let error = unsafe { POAGetCameraProperties(i, &raw mut camera_prop) };
 
             if error != _POAErrors::POA_OK {
                 continue;
@@ -173,7 +174,7 @@ impl Camera {
     /// the image data is available? if true, you can call get_image_data to get image data
     pub fn is_image_ready(&self) -> POAResult<bool> {
         let mut is_img_data_available = POA_FALSE;
-        let error = unsafe { POAImageReady(self.camera_id, &mut is_img_data_available) };
+        let error = unsafe { POAImageReady(self.camera_id, &raw mut is_img_data_available) };
         if error != _POAErrors::POA_OK {
             return Err(error.into());
         }
@@ -224,19 +225,30 @@ impl Camera {
     /// This is an expensive operation and should not be called frequently
     pub fn config_bounds(&self) -> AllConfigBounds {
         let mut config_count = 0;
-        safe_error(unsafe { POAGetConfigsCount(self.camera_id, &mut config_count) });
+        safe_error(unsafe { POAGetConfigsCount(self.camera_id, &raw mut config_count) });
 
         let mut attributes = Vec::with_capacity(40);
 
         for i in 0..config_count {
             let mut conf_attributes = POAConfigAttributes::default();
 
-            safe_error(unsafe { POAGetConfigAttributes(self.camera_id, i, &mut conf_attributes) });
+            safe_error(unsafe {
+                POAGetConfigAttributes(self.camera_id, i, &raw mut conf_attributes)
+            });
 
             attributes.push(conf_attributes);
         }
 
         AllConfigBounds::from(attributes)
+    }
+
+    pub fn set_dps(&mut self, dps: bool) -> POAResult<()> {
+        let b: POABool = dps.into();
+        let error = unsafe { POASetEnableDPS(self.camera_id, &raw const b) };
+        if error != _POAErrors::POA_OK {
+            return Err(error.into());
+        }
+        Ok(())
     }
 
     /// Sets the Region Of Interest
@@ -278,7 +290,7 @@ impl Camera {
         let mut width = 0;
         let mut height = 0;
 
-        safe_error(unsafe { POAGetImageSize(self.camera_id, &mut width, &mut height) });
+        safe_error(unsafe { POAGetImageSize(self.camera_id, &raw mut width, &raw mut height) });
 
         if width < 0 || height < 0 {
             panic!("negative image size: {} {}", width, height);
@@ -307,7 +319,9 @@ impl Camera {
         let mut start_x = 0;
         let mut start_y = 0;
 
-        safe_error(unsafe { POAGetImageStartPos(self.camera_id, &mut start_x, &mut start_y) });
+        safe_error(unsafe {
+            POAGetImageStartPos(self.camera_id, &raw mut start_x, &raw mut start_y)
+        });
 
         if start_x < 0 || start_y < 0 {
             panic!("negative image start position: {} {}", start_x, start_y);
@@ -329,7 +343,7 @@ impl Camera {
     pub fn image_format(&self) -> POAResult<ImageFormat> {
         let mut poa_img_format = POAImgFormat::POA_END;
 
-        safe_error(unsafe { POAGetImageFormat(self.camera_id, &mut poa_img_format) });
+        safe_error(unsafe { POAGetImageFormat(self.camera_id, &raw mut poa_img_format) });
         Ok(poa_img_format.into())
     }
 
@@ -354,7 +368,7 @@ impl Camera {
     /// Returns the current binning factor
     pub fn bin(&self) -> u32 {
         let mut bin = 0;
-        safe_error(unsafe { POAGetImageBin(self.camera_id, &mut bin) });
+        safe_error(unsafe { POAGetImageBin(self.camera_id, &raw mut bin) });
         bin as u32
     }
 
@@ -650,8 +664,14 @@ impl Camera {
         let mut config_value = POAConfigValue::default();
         let mut is_auto = POABool::POA_FALSE;
 
-        let error =
-            unsafe { POAGetConfig(self.camera_id, poa_config, &mut config_value, &mut is_auto) };
+        let error = unsafe {
+            POAGetConfig(
+                self.camera_id,
+                poa_config,
+                &raw mut config_value,
+                &raw mut is_auto,
+            )
+        };
         if error != _POAErrors::POA_OK {
             return Err(error.into());
         }
