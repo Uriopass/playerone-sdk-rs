@@ -1,16 +1,16 @@
 use std::ffi::{c_int, c_long};
 
-use playerone_sdk_sys::{
-    _POABool as POABool, _POAConfig as POAConfig, _POAErrors, _POAImgFormat as POAImgFormat, FromPOAConfigValue,
-    POACameraProperties, POACloseCamera, POAConfigAttributes, POAConfigValue, POAErrors,
-    POAGetCameraCount, POAGetCameraProperties, POAGetConfig, POAGetConfigAttributes, POAGetConfigsCount,
-    POAGetImageBin, POAGetImageData, POAGetImageFormat, POAGetImageSize, POAGetImageStartPos,
-    POAImageReady, POAInitCamera, POAOpenCamera, POASetConfig, POASetEnableDPS,
-    POASetImageBin, POASetImageFormat, POASetImageSize, POASetImageStartPos, POAStartExposure,
-    POAStopExposure,
-};
 use playerone_sdk_sys::POABool::{POA_FALSE, POA_TRUE};
 use playerone_sdk_sys::POAConfig::{POA_EXPOSURE, POA_GAIN};
+use playerone_sdk_sys::{
+    FromPOAConfigValue, POACameraProperties, POACloseCamera, POAConfigAttributes, POAConfigValue,
+    POAErrors, POAGetCameraCount, POAGetCameraProperties, POAGetConfig, POAGetConfigAttributes,
+    POAGetConfigsCount, POAGetImageBin, POAGetImageData, POAGetImageFormat, POAGetImageSize,
+    POAGetImageStartPos, POAImageReady, POAInitCamera, POAOpenCamera, POASetConfig,
+    POASetEnableDPS, POASetImageBin, POASetImageFormat, POASetImageSize, POASetImageStartPos,
+    POAStartExposure, POAStopExposure, _POABool as POABool, _POAConfig as POAConfig, _POAErrors,
+    _POAImgFormat as POAImgFormat,
+};
 
 use crate::{AllConfigBounds, CameraProperties, Error, ImageFormat};
 
@@ -151,6 +151,7 @@ impl Camera {
             }
         }
 
+        self.stop_exposure()?;
         Ok(())
     }
 
