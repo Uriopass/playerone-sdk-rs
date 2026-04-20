@@ -115,6 +115,20 @@ impl From<_POACameraProperties> for CameraProperties {
     }
 }
 
+/// A sensor-mode slot reported by the camera. Player One cameras that
+/// advertise "Dual Sampling" typically expose at least `"Normal"` (higher FPS)
+/// and `"LRN"` (lower read noise). The set of modes is camera-specific and
+/// identified by the integer `index` used with [`crate::Camera::set_sensor_mode`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SensorMode {
+    /// Zero-based index to pass to [`crate::Camera::set_sensor_mode`].
+    pub index: u32,
+    /// Short display name (e.g. "Normal", "LRN"). Suitable for a UI combobox.
+    pub name: String,
+    /// Longer description, suitable for a tooltip.
+    pub description: String,
+}
+
 #[repr(i32)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub enum ImageFormat {
