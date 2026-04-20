@@ -1,6 +1,6 @@
 [package]
 name = "playerone-sdk"
-version = "0.2.2"
+version = "0.3.0"
 edition = "2021"
 description = "PlayerOne SDK bindings"
 license = "MIT"
@@ -24,3 +24,6 @@ name = "stream"
 
 [[example]]
 name = "fps"
+
+[[example]]
+name = "sensor_mode"

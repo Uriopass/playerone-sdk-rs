@@ -1,4 +1,4 @@
-use std::ffi::{c_int, c_long};
+use std::ffi::{c_char, c_int, c_long};
 
 use playerone_sdk_sys::POABool::{POA_FALSE, POA_TRUE};
 use playerone_sdk_sys::POAConfig::{POA_EXPOSURE, POA_GAIN};
@@ -6,13 +6,14 @@ use playerone_sdk_sys::{
     FromPOAConfigValue, POACameraProperties, POACloseCamera, POAConfigAttributes, POAConfigValue,
     POAErrors, POAGetCameraCount, POAGetCameraProperties, POAGetConfig, POAGetConfigAttributes,
     POAGetConfigsCount, POAGetImageBin, POAGetImageData, POAGetImageFormat, POAGetImageSize,
-    POAGetImageStartPos, POAImageReady, POAInitCamera, POAOpenCamera, POASetConfig,
-    POASetEnableDPS, POASetImageBin, POASetImageFormat, POASetImageSize, POASetImageStartPos,
+    POAGetImageStartPos, POAGetSensorMode, POAGetSensorModeCount, POAGetSensorModeInfo,
+    POAImageReady, POAInitCamera, POAOpenCamera, POASensorModeInfo, POASetConfig, POASetEnableDPS,
+    POASetImageBin, POASetImageFormat, POASetImageSize, POASetImageStartPos, POASetSensorMode,
     POAStartExposure, POAStopExposure, _POABool as POABool, _POAConfig as POAConfig, _POAErrors,
     _POAImgFormat as POAImgFormat,
 };
 
-use crate::{AllConfigBounds, CameraProperties, Error, ImageFormat};
+use crate::{AllConfigBounds, CameraProperties, Error, ImageFormat, SensorMode};
 
 type POAResult<T> = Result<T, Error>;
 
@@ -46,8 +47,10 @@ impl CameraDescription {
             camera_id: self.camera_id,
             closed: false,
             properties: self.properties,
+            sensor_modes: Vec::new(),
         };
         camera.open()?;
+        camera.sensor_modes = enumerate_sensor_modes(camera.camera_id);
         Ok(camera)
     }
 }
@@ -57,6 +60,7 @@ pub struct Camera {
     camera_id: i32,
     closed: bool,
     properties: CameraProperties,
+    sensor_modes: Vec<SensorMode>,
 }
 
 impl Drop for Camera {
@@ -371,6 +375,46 @@ impl Camera {
         let mut bin = 0;
         safe_error(unsafe { POAGetImageBin(self.camera_id, &raw mut bin) });
         bin as u32
+    }
+
+    /// Sensor modes advertised by this camera. Empty when the camera does not
+    /// support mode selection (e.g. most entry-level models). The list is
+    /// enumerated once at [`CameraDescription::open`] time and is stable for
+    /// the lifetime of the [`Camera`] handle.
+    pub fn sensor_modes(&self) -> &[SensorMode] {
+        &self.sensor_modes
+    }
+
+    /// Current sensor-mode index.
+    ///
+    /// Returns [`Error::AccessDenied`] on cameras that do not support mode
+    /// selection. Consumers can pre-check with `sensor_modes().is_empty()`.
+    pub fn sensor_mode(&self) -> POAResult<u32> {
+        let mut index: c_int = 0;
+        let err = unsafe { POAGetSensorMode(self.camera_id, &raw mut index) };
+        if err != _POAErrors::POA_OK {
+            return Err(err.into());
+        }
+        if index < 0 {
+            return Err(Error::OperationFailed);
+        }
+        Ok(index as u32)
+    }
+
+    /// Set the active sensor mode by index.
+    ///
+    /// The caller must stop any running exposure before calling this (matches
+    /// the underlying SDK requirement). Returns [`Error::OutOfBounds`] when the
+    /// index is not one of the indices reported by [`Self::sensor_modes`].
+    pub fn set_sensor_mode(&mut self, index: u32) -> POAResult<()> {
+        if (index as usize) >= self.sensor_modes.len() {
+            return Err(Error::OutOfBounds);
+        }
+        let err = unsafe { POASetSensorMode(self.camera_id, index as c_int) };
+        if err != _POAErrors::POA_OK {
+            return Err(err.into());
+        }
+        Ok(())
     }
 
     pub fn properties(&self) -> &CameraProperties {
@@ -698,4 +742,40 @@ fn safe_error(error: POAErrors) {
         return;
     }
     panic!("unexpected POA error: {}", Error::from(error));
+}
+
+/// Enumerate sensor modes for an opened camera. Returns an empty vec when
+/// the camera does not support mode selection (count == 0 or access denied)
+/// so that a plain camera open never fails for this reason.
+fn enumerate_sensor_modes(camera_id: i32) -> Vec<SensorMode> {
+    let mut count: c_int = 0;
+    let err = unsafe { POAGetSensorModeCount(camera_id, &raw mut count) };
+    if err != _POAErrors::POA_OK || count <= 0 {
+        return Vec::new();
+    }
+
+    let mut modes = Vec::with_capacity(count as usize);
+    for index in 0..count {
+        let mut info = POASensorModeInfo::default();
+        let err = unsafe { POAGetSensorModeInfo(camera_id, index, &raw mut info) };
+        if err != _POAErrors::POA_OK {
+            continue;
+        }
+        modes.push(SensorMode {
+            index: index as u32,
+            name: c_char_array_to_string(&info.name),
+            description: c_char_array_to_string(&info.desc),
+        });
+    }
+    modes
+}
+
+/// Decode a fixed-size C char buffer that may or may not be NUL-terminated.
+/// Safer than `CStr::from_ptr` here because the SDK fills `POASensorModeInfo`
+/// fields without a length and a pathological firmware could in principle
+/// write exactly `buf.len()` bytes with no trailing NUL.
+fn c_char_array_to_string(buf: &[c_char]) -> String {
+    let nul = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+    let bytes: Vec<u8> = buf[..nul].iter().map(|&c| c as u8).collect();
+    String::from_utf8_lossy(&bytes).into_owned()
 }
