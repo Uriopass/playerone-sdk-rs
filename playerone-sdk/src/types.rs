@@ -129,6 +129,12 @@ pub struct SensorMode {
     pub description: String,
 }
 
+impl std::fmt::Display for SensorMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
 #[repr(i32)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
 pub enum ImageFormat {
