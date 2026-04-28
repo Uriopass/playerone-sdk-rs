@@ -47,10 +47,8 @@ impl CameraDescription {
             camera_id: self.camera_id,
             closed: false,
             properties: self.properties,
-            sensor_modes: Vec::new(),
         };
         camera.open()?;
-        camera.sensor_modes = enumerate_sensor_modes(camera.camera_id);
         Ok(camera)
     }
 }
@@ -60,7 +58,6 @@ pub struct Camera {
     camera_id: i32,
     closed: bool,
     properties: CameraProperties,
-    sensor_modes: Vec<SensorMode>,
 }
 
 impl Drop for Camera {
@@ -377,18 +374,18 @@ impl Camera {
         bin as u32
     }
 
-    /// Sensor modes advertised by this camera. Empty when the camera does not
-    /// support mode selection (e.g. most entry-level models). The list is
-    /// enumerated once at [`CameraDescription::open`] time and is stable for
-    /// the lifetime of the [`Camera`] handle.
-    pub fn sensor_modes(&self) -> &[SensorMode] {
-        &self.sensor_modes
+    /// Enumerate sensor modes advertised by this camera.
+    ///
+    /// Returns an empty vec when the camera does not support mode selection
+    /// (e.g. most entry-level models). Each call queries the hardware.
+    pub fn sensor_modes(&self) -> POAResult<Vec<SensorMode>> {
+        enumerate_sensor_modes(self.camera_id)
     }
 
     /// Current sensor-mode index.
     ///
     /// Returns [`Error::AccessDenied`] on cameras that do not support mode
-    /// selection. Consumers can pre-check with `sensor_modes().is_empty()`.
+    /// selection.
     pub fn sensor_mode(&self) -> POAResult<u32> {
         let mut index: c_int = 0;
         let err = unsafe { POAGetSensorMode(self.camera_id, &raw mut index) };
@@ -404,12 +401,8 @@ impl Camera {
     /// Set the active sensor mode by index.
     ///
     /// The caller must stop any running exposure before calling this (matches
-    /// the underlying SDK requirement). Returns [`Error::OutOfBounds`] when the
-    /// index is not one of the indices reported by [`Self::sensor_modes`].
+    /// the underlying SDK requirement).
     pub fn set_sensor_mode(&mut self, index: u32) -> POAResult<()> {
-        if (index as usize) >= self.sensor_modes.len() {
-            return Err(Error::OutOfBounds);
-        }
         let err = unsafe { POASetSensorMode(self.camera_id, index as c_int) };
         if err != _POAErrors::POA_OK {
             return Err(err.into());
@@ -744,14 +737,18 @@ fn safe_error(error: POAErrors) {
     panic!("unexpected POA error: {}", Error::from(error));
 }
 
-/// Enumerate sensor modes for an opened camera. Returns an empty vec when
-/// the camera does not support mode selection (count == 0 or access denied)
-/// so that a plain camera open never fails for this reason.
-fn enumerate_sensor_modes(camera_id: i32) -> Vec<SensorMode> {
+/// Enumerate sensor modes for an opened camera.
+///
+/// Returns an empty vec when the mode count is zero (camera does not support
+/// mode selection). Propagates SDK errors via `POAResult`.
+fn enumerate_sensor_modes(camera_id: i32) -> POAResult<Vec<SensorMode>> {
     let mut count: c_int = 0;
     let err = unsafe { POAGetSensorModeCount(camera_id, &raw mut count) };
-    if err != _POAErrors::POA_OK || count <= 0 {
-        return Vec::new();
+    if err != _POAErrors::POA_OK {
+        return Err(err.into());
+    }
+    if count <= 0 {
+        return Ok(Vec::new());
     }
 
     let mut modes = Vec::with_capacity(count as usize);
@@ -759,7 +756,7 @@ fn enumerate_sensor_modes(camera_id: i32) -> Vec<SensorMode> {
         let mut info = POASensorModeInfo::default();
         let err = unsafe { POAGetSensorModeInfo(camera_id, index, &raw mut info) };
         if err != _POAErrors::POA_OK {
-            continue;
+            return Err(err.into());
         }
         modes.push(SensorMode {
             index: index as u32,
@@ -767,7 +764,7 @@ fn enumerate_sensor_modes(camera_id: i32) -> Vec<SensorMode> {
             description: c_char_array_to_string(&info.desc),
         });
     }
-    modes
+    Ok(modes)
 }
 
 /// Decode a fixed-size C char buffer that may or may not be NUL-terminated.
