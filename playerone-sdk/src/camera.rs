@@ -777,5 +777,5 @@ fn enumerate_sensor_modes(camera_id: i32) -> Vec<SensorMode> {
 fn c_char_array_to_string(buf: &[c_char]) -> String {
     let nul = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
     let bytes: Vec<u8> = buf[..nul].iter().map(|&c| c as u8).collect();
-    String::from_utf8_lossy(&bytes).into_owned()
+    String::from_utf8_lossy(&bytes).trim().to_string()
 }

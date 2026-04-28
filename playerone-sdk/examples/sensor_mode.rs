@@ -24,11 +24,24 @@ pub fn main() {
         println!("  [{}] {} - {}", mode.index, mode.name, mode.description);
     }
 
-    let current = camera.sensor_mode().expect("reading current sensor mode");
-    println!("Current: {}", current);
+    let current_idx = camera.sensor_mode().expect("reading current sensor mode");
+    let current_name = modes
+        .iter()
+        .find(|m| m.index == current_idx)
+        .map(|m| m.name.as_str())
+        .unwrap_or("unknown");
+    println!("Current: {} (index {})", current_name, current_idx);
 
-    if let Some(lrn) = modes.iter().find(|m| m.name.to_lowercase().contains("lrn")) {
-        println!("Switching to: {}", lrn.name);
+    // Different cameras label the low-readout-noise mode differently:
+    // Uranus-C Pro → "LRN", Ares-C PRO → "Low Noise", etc.
+    if let Some(lrn) = modes.iter().find(|m| {
+        let name = m.name.to_lowercase();
+        name.contains("lrn")
+            || name.contains("low readout")
+            || name.contains("low read")
+            || name.contains("low noise")
+    }) {
+        println!("Switching to: {}", lrn);
         camera
             .set_sensor_mode(lrn.index)
             .expect("setting sensor mode");
