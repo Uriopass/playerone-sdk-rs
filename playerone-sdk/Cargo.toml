@@ -1,6 +1,6 @@
 [package]
 name = "playerone-sdk"
-version = "0.3.0"
+version = "0.2.3"
 edition = "2021"
 description = "PlayerOne SDK bindings"
 license = "MIT"
