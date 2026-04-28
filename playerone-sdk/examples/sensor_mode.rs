@@ -10,7 +10,7 @@ pub fn main() {
 
     let mut camera = camera_description.open().expect("opening camera");
 
-    let modes = camera.sensor_modes().to_vec();
+    let modes = camera.sensor_modes().expect("enumerating sensor modes");
     if modes.is_empty() {
         println!(
             "{} does not support sensor mode selection",

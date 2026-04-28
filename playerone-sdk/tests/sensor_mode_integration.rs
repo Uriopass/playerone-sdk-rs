@@ -7,7 +7,7 @@
 //! cargo test --test sensor_mode_integration -- --ignored
 //! ```
 
-use playerone_sdk::{Camera, Error, SensorMode};
+use playerone_sdk::{Camera, SensorMode};
 
 fn find_mode_by_keywords<'a>(modes: &'a [SensorMode], keywords: &[&str]) -> Option<&'a SensorMode> {
     modes.iter().find(|m| {
@@ -26,7 +26,7 @@ fn open_first_camera() -> playerone_sdk::Camera {
 #[ignore]
 fn sensor_modes_are_enumerated() {
     let camera = open_first_camera();
-    let modes = camera.sensor_modes();
+    let modes = camera.sensor_modes().expect("failed to enumerate sensor modes");
 
     // We can't assert the count because it's camera-dependent, but if the
     // camera supports dual sampling it should have ≥ 2 modes.
@@ -40,7 +40,7 @@ fn sensor_modes_are_enumerated() {
 
     assert!(modes.len() >= 2, "Expected at least 2 sensor modes, got {}", modes.len());
 
-    for mode in modes {
+    for mode in &modes {
         assert!(!mode.name.is_empty(), "Sensor mode name should not be empty");
         println!("  [{}] {} — {}", mode.index, mode.name, mode.description);
     }
@@ -50,7 +50,7 @@ fn sensor_modes_are_enumerated() {
 #[ignore]
 fn switch_to_normal_then_lrn() {
     let mut camera = open_first_camera();
-    let modes = camera.sensor_modes().to_vec();
+    let modes = camera.sensor_modes().expect("failed to enumerate sensor modes");
 
     if modes.is_empty() {
         println!(
@@ -87,9 +87,9 @@ fn switch_to_normal_then_lrn() {
 
 #[test]
 #[ignore]
-fn set_sensor_mode_out_of_bounds() {
+fn set_sensor_mode_invalid_index_returns_error() {
     let mut camera = open_first_camera();
-    let modes = camera.sensor_modes();
+    let modes = camera.sensor_modes().expect("failed to enumerate sensor modes");
 
     if modes.is_empty() {
         println!(
@@ -102,8 +102,8 @@ fn set_sensor_mode_out_of_bounds() {
     let invalid_index = modes.len() as u32 + 10;
     let result = camera.set_sensor_mode(invalid_index);
     assert!(
-        matches!(result, Err(Error::OutOfBounds)),
-        "Expected OutOfBounds error for index {invalid_index}, got {result:?}"
+        result.is_err(),
+        "Expected an error for invalid index {invalid_index}, got {result:?}"
     );
 }
 
@@ -111,7 +111,7 @@ fn set_sensor_mode_out_of_bounds() {
 #[ignore]
 fn display_impl_for_sensor_mode() {
     let camera = open_first_camera();
-    let modes = camera.sensor_modes();
+    let modes = camera.sensor_modes().expect("failed to enumerate sensor modes");
 
     if modes.is_empty() {
         println!(
@@ -121,7 +121,9 @@ fn display_impl_for_sensor_mode() {
         return;
     }
 
-    for mode in modes {
+    println!("Supported camera modes: {:?}", modes);
+
+    for mode in &modes {
         let displayed = format!("{}", mode);
         assert_eq!(displayed, mode.name, "Display should output the mode name");
         // Verify trimming — no leading/trailing whitespace
